@@ -1,0 +1,2 @@
+# LyNN
+Lazy Neural Network
