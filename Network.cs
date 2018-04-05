@@ -175,9 +175,12 @@ namespace LyNN
             for(int i = 0; i < allNodes.Count; i++)
             {
                 List<Node> nn = allNodes[i];
+
+                //Write the amount of nodes in this layer on one line
                 nt += nn.Count + "\n";
                 foreach(Node n in nn)
                 {
+                    //Then, for each node, write the bias on one line, and all of its children weights in order of the node's index
                     nt += n.bias + "\n";
                     foreach (Weight w in n.children)
                     {
@@ -187,7 +190,7 @@ namespace LyNN
                 }
                 nt += "\n";
             }
-            File.WriteAllText(name, nt.Substring(0, nt.Length - 2));
+            File.WriteAllText(name, nt.Substring(0, nt.Length - 2)); //The -2 is to get rid of two newlines that would otherwise always exist at the end of the file
         }
 
         /// <summary>
@@ -203,6 +206,7 @@ namespace LyNN
             net.allNodes = new List<List<Node>>();
 
             //Read file
+            //The layers are split by a double newline
             string[] all = File.ReadAllText(name).Split(new string[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
             net.numLayers = all.Length - 2;
 
@@ -226,23 +230,28 @@ namespace LyNN
                     Node n = new Node();
                     n.children = new List<Weight>();
                     n.parents = new List<Weight>();
+
                     if (layer == 0)
                     {
+                        //Input nodes get marked as input nodes and added to the list of input nodes
                         net.inputs.Add(n);
                         n.type = NodeType.input;
                     }
                     else if (layer == all.Length - 1)
                     {
+                        //Output nodes get marked as output nodes and added to the list of output nodes
                         net.outputs.Add(n);
                         n.type = NodeType.output;
                     }
-                    else n.type = NodeType.node;
+                    else n.type = NodeType.node; //Everything else is a regular node
 
+                    //Add this node to the list of all nodes, then start reading the values out of the file
                     net.allNodes[layer].Add(n);
                     n.bias = float.Parse(lines[i * 2 + 1]);
 
                     if (i * 2 + 2 < lines.Length)
                     {
+                        //Add all of the children weights in order
                         string[] ws = lines[i * 2 + 2].Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
                         for(int j = 0; j < ws.Length; j++)
                         {
@@ -353,6 +362,10 @@ namespace LyNN
             }
         }
 
+        /// <summary>
+        /// Backpropagate this node based on its children's error values
+        /// </summary>
+        /// <param name="n">The node to calculate error values for</param>
         void backPropOne(Node n)
         {
             float sum = 0;
@@ -372,13 +385,6 @@ namespace LyNN
 
             n.bc += sum * n.value * (1 - n.value) * n.bias;
             n.bc_count++;
-        }
-
-        float powsig(float d)
-        {
-            bool sig = d < 0;
-            float t = d * d;
-            return sig ? -t : t;
         }
 
         /// <summary>
