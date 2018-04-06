@@ -10,8 +10,8 @@ Setting up a network with a few layers, 4 inputs and 1 output, randomizing it, a
     nw.randomizeNetwork();
     
     //Feeding it two training examples
-    nw.trainNetwork(new float[] { 2.1526f,  -6.1665f,  8.0831f,   -0.34355f }, new float[]{ 0 });
-    nw.trainNetwork(new float[] { -0.4294f, -0.14693f, 0.044265f, -0.15605f }, new float[]{ 1 });
+    nw.trainNetwork(new float[] { 0.1526f, 0.1665f, 0.3283f, 0.3435f }, new float[]{ 0 });
+    nw.trainNetwork(new float[] { 0.4294f, 0.1469f, 0.0442f, 0.1560f }, new float[]{ 1 });
 
     //Applying the average nudges these two training examples gave
     nw.applyTrainingChanges(1);
