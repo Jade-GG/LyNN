@@ -56,7 +56,7 @@ namespace LyNN
         /// <param name="layers">An array containing the amount of hidden nodes per layer</param>
         /// <param name="numOutputs">Amount of outputs the network should have</param>
         /// <returns>Returns a Network object</returns>
-        public static Network buildNetwork(int numInputs, int[] layers, int numOutputs)
+        public static Network BuildNetwork(int numInputs, int[] layers, int numOutputs)
         {
             //Sanity checking arguments
             if (numInputs < 1) throw new Exception("Can't have less than one input");
@@ -145,7 +145,7 @@ namespace LyNN
         /// <summary>
         /// Randomizes the weights and biases for the network
         /// </summary>
-        public void randomizeNetwork()
+        public void RandomizeNetwork()
         {
             for(int i = 0; i < allNodes.Count; i++)
             {
@@ -274,14 +274,14 @@ namespace LyNN
         /// </summary>
         /// <param name="val">The value to squish</param>
         /// <returns>Returns the squished (sigmoid) value of the given argument</returns>
-        public static float sig(float val) { return (float)(1f / (1f + Math.Exp(-val))); }
+        static float Sigmoid(float val) { return (float)(1f / (1f + Math.Exp(-val))); }
 
         /// <summary>
         /// Evaluates what the network thinks about the inputs
         /// </summary>
         /// <param name="inputs">The inputs to evaluate</param>
         /// <returns>Returns the output of the network</returns>
-        public float[] evaluate(float[] inputs)
+        public float[] Evaluate(float[] inputs)
         {
             if (inputs.Length != numInputs) throw new Exception("Incorrect number of inputs given! Got " + inputs.Length.ToString() + ", expected " + numInputs.ToString());
 
@@ -293,7 +293,7 @@ namespace LyNN
                 for (int j = 0; j < allNodes[i].Count; j++)
                 {
                     Node n = (allNodes[i])[j];
-                    n.value = getNodeVal(n);
+                    n.value = GetNodeVal(n);
                 }
             }
 
@@ -310,17 +310,17 @@ namespace LyNN
         /// <param name="inputs">Training data inputs</param>
         /// <param name="goodOutputs">Training data outputs(that the network should strive to get right)</param>
         /// <returns>Returns the total error in the output, lower is better</returns>
-        public float trainNetwork(float[] inputs, float[] goodOutputs)
+        public float TrainNetwork(float[] inputs, float[] goodOutputs)
         {
             //Feed the inputs to the network and evaluate
-            float[] rets = evaluate(inputs);
+            float[] rets = Evaluate(inputs);
 
             //Calculate the total error to return later
             float errorsum = 0;
             for (int i = 0; i < goodOutputs.Length; i++)
             {
                 outputs[i].error = goodOutputs[i] - rets[i];
-                errorsum += getError(goodOutputs[i], rets[i]);
+                errorsum += GetError(goodOutputs[i], rets[i]);
             }
 
             //Go through all nodes backwards(from output to input) and adjust the weights based on the error values. Skip the output nodes
@@ -329,7 +329,7 @@ namespace LyNN
                 List<Node> nodes = allNodes[i];
                 for (int j = 0; j < nodes.Count; j++)
                 {
-                    backPropOne(nodes[j]);
+                    BackPropOne(nodes[j]);
                 }
             }
 
@@ -340,7 +340,7 @@ namespace LyNN
         /// Applies the average of all changes that the last training set proposed
         /// </summary>
         /// <param name="rate">The rate at which to change</param>
-        public void applyTrainingChanges(float rate)
+        public void ApplyTrainingChanges(float rate)
         {
             for (int i = numLayers; i >= 0; i--)
             {
@@ -366,7 +366,7 @@ namespace LyNN
         /// Backpropagate this node based on its children's error values
         /// </summary>
         /// <param name="n">The node to calculate error values for</param>
-        void backPropOne(Node n)
+        void BackPropOne(Node n)
         {
             float sum = 0;
             for (int i = 0; i < n.children.Count; i++)
@@ -393,7 +393,7 @@ namespace LyNN
         /// <param name="expected">The correct output value that the network should strive towards</param>
         /// <param name="actual">The actual output value of the network</param>
         /// <returns>Returns the error value</returns>
-        float getError(float expected, float actual)
+        float GetError(float expected, float actual)
         {
             float diff = expected - actual;
             return 0.5f * diff * diff;
@@ -405,14 +405,14 @@ namespace LyNN
         /// </summary>
         /// <param name="w">The given weight</param>
         /// <returns>Returns the value attached to this weight</returns>
-        float mulWN(Weight w) { return w.value * w.parent.value; }
+        float MulWN(Weight w) { return w.value * w.parent.value; }
 
         /// <summary>
         /// Calculates the value that a node should be(without actually editing the value of the node)
         /// </summary>
         /// <param name="n">The node to calculate the value for</param>
         /// <returns>The value of the node</returns>
-        float getNodeVal(Node n)
+        float GetNodeVal(Node n)
         {
             if (n.type == NodeType.input) return n.value;
 
@@ -420,10 +420,10 @@ namespace LyNN
             float c = 0;
             foreach(Weight w in n.parents)
             {
-                sum += mulWN(w);
+                sum += MulWN(w);
                 c++;
             }
-            return sig(sum + n.bias);
+            return Sigmoid(sum + n.bias);
         }
     }
 }
