@@ -182,15 +182,22 @@ namespace LyNN
                 {
                     //Then, for each node, write the bias on one line, and all of its children weights in order of the node's index
                     nt += n.bias + "\n";
-                    foreach (Weight w in n.children)
+                    if (n.children.Count == 0)
                     {
-                        nt += w.value + ";";
+                        nt += ";";
+                    }
+                    else
+                    {
+                        foreach (Weight w in n.children)
+                        {
+                            nt += w.value + ";";
+                        }
                     }
                     nt += "\n";
                 }
                 nt += "\n";
             }
-            File.WriteAllText(name, nt.Substring(0, nt.Length - 2)); //The -2 is to get rid of two newlines that would otherwise always exist at the end of the file
+            File.WriteAllText(name, nt.Substring(0, nt.Length - 1)); //The -1 is to get rid of the double newline that would otherwise always exist at the end of the file
         }
 
         /// <summary>
