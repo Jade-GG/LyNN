@@ -23,6 +23,7 @@ namespace LyNN
 
         //error values
         public float error;
+        public float nact;
         public float bc;
         public int bc_count;
     }
@@ -330,6 +331,12 @@ namespace LyNN
                 errorsum += GetError(goodOutputs[i], rets[i]);
             }
 
+            //Go through all output nodes, adjust the biases and set nact values.
+            for (int j = 0; j < outputs.Count; j++)
+            {
+                BackPropOutputOne(outputs[j]);
+            }
+
             //Go through all nodes backwards(from output to input) and adjust the weights based on the error values. Skip the output nodes
             for (int i = numLayers; i >= 0; i--)
             {
@@ -349,7 +356,7 @@ namespace LyNN
         /// <param name="rate">The rate at which to change</param>
         public void ApplyTrainingChanges(float rate)
         {
-            for (int i = numLayers; i >= 0; i--)
+            for (int i = numLayers + 1; i >= 0; i--)
             {
                 List<Node> nodes = allNodes[i];
                 for (int j = 0; j < nodes.Count; j++)
@@ -362,7 +369,7 @@ namespace LyNN
                         cw.vc = 0;
                         cw.vc_count = 0;
                     }
-                    n.bias += n.bc / (float)n.bc_count;
+                    n.bias += (n.bc * n.bias) / (float)n.bc_count;
                     n.bc = 0;
                     n.bc_count = 0;
                 }
@@ -379,18 +386,30 @@ namespace LyNN
             for (int i = 0; i < n.children.Count; i++)
             {
                 Weight cw = n.children[i];
-                Node child = cw.child;
-                float nact = child.value * (1 - child.value);
+                float nact = cw.child.nact;
 
                 //Adjust weight based on rate and add error to total error sum
-                cw.vc += child.error * nact * n.value;
+                cw.vc += nact * n.value;
                 cw.vc_count++;
 
-                sum += child.error * nact * cw.value;
+                sum += nact * cw.value;
             }
-            n.error = sum;
 
-            n.bc += sum * n.value * (1 - n.value) * n.bias;
+            float nv = sum * n.value * (1 - n.value);
+            n.nact = nv;
+            n.bc += nv; //Because the bias doesn't change, we can multiply it later.
+            n.bc_count++;
+        }
+
+        /// <summary>
+        /// Backpropagation similar to every other node, but skipping some lines so that it works for output nodes as well
+        /// </summary>
+        /// <param name="n">The node to calculate error values for</param>
+        void BackPropOutputOne(Node n)
+        {
+            float nv = n.error * n.value * (1 - n.value);
+            n.nact = nv;
+            n.bc += nv; //Because the bias doesn't change, we can multiply it later.
             n.bc_count++;
         }
 
