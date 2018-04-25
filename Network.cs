@@ -278,11 +278,32 @@ namespace LyNN
         }
 
         /// <summary>
-        /// Sigmoid activation function
+        /// Exponential-based sigmoid activation function
         /// </summary>
-        /// <param name="val">The value to squish</param>
-        /// <returns>Returns the squished (sigmoid) value of the given argument</returns>
-        static float Sigmoid(float val) { return (float)(1f / (1f + Math.Exp(-val))); }
+        static float Sigmoid_e(float val) { return (float)(1f / (1f + Math.Exp(-val))); }
+
+        /// <summary>
+        /// ELU rectifier activation function
+        /// </summary>
+        static float ELU(float val)
+        {
+            if (val >= 0) return val;
+            else return (float)(Math.Exp(val) - 1);
+        }
+
+        /// <summary>
+        /// Derivative of the exponential-based sigmoid activation function
+        /// </summary>
+        static float D_Sigmoid_e(float val) { return val * (1 - val); }
+
+        /// <summary>
+        /// Derivative of the ELU rectifier function
+        /// </summary>
+        static float D_ELU(float val)
+        {
+            if (val >= 0) return 1;
+            else return (float)Math.Exp(val);
+        }
 
         /// <summary>
         /// Evaluates what the network thinks about the inputs
@@ -365,11 +386,11 @@ namespace LyNN
                     for (int x = 0; x < n.children.Count; x++)
                     {
                         Weight cw = n.children[x];
-                        cw.value += cw.vc / (float)cw.vc_count;
+                        cw.value += rate * (cw.vc / (float)cw.vc_count);
                         cw.vc = 0;
                         cw.vc_count = 0;
                     }
-                    n.bias += (n.bc * n.bias) / (float)n.bc_count;
+                    n.bias += rate * ((n.bc * n.bias) / (float)n.bc_count);
                     n.bc = 0;
                     n.bc_count = 0;
                 }
@@ -382,7 +403,7 @@ namespace LyNN
         /// <param name="n">The node to calculate error values for</param>
         void BackPropOne(Node n)
         {
-            float sum = 0;
+            float err_sum = 0;
             for (int i = 0; i < n.children.Count; i++)
             {
                 Weight cw = n.children[i];
@@ -392,10 +413,10 @@ namespace LyNN
                 cw.vc += nact * n.value;
                 cw.vc_count++;
 
-                sum += nact * cw.value;
+                err_sum += nact * cw.value;
             }
 
-            float nv = sum * n.value * (1 - n.value);
+            float nv = err_sum * D_ELU(n.value);
             n.nact = nv;
             n.bc += nv; //Because the bias doesn't change, we can multiply it later.
             n.bc_count++;
@@ -407,7 +428,7 @@ namespace LyNN
         /// <param name="n">The node to calculate error values for</param>
         void BackPropOutputOne(Node n)
         {
-            float nv = n.error * n.value * (1 - n.value);
+            float nv = n.error * D_ELU(n.value);
             n.nact = nv;
             n.bc += nv; //Because the bias doesn't change, we can multiply it later.
             n.bc_count++;
@@ -425,14 +446,6 @@ namespace LyNN
             return 0.5f * diff * diff;
         }
 
-
-        /// <summary>
-        /// Gets the value attached to this weight(i.e. node value * weight)
-        /// </summary>
-        /// <param name="w">The given weight</param>
-        /// <returns>Returns the value attached to this weight</returns>
-        float MulWN(Weight w) { return w.value * w.parent.value; }
-
         /// <summary>
         /// Calculates the value that a node should be(without actually editing the value of the node)
         /// </summary>
@@ -443,13 +456,8 @@ namespace LyNN
             if (n.type == NodeType.input) return n.value;
 
             float sum = 0;
-            float c = 0;
-            foreach(Weight w in n.parents)
-            {
-                sum += MulWN(w);
-                c++;
-            }
-            return Sigmoid(sum + n.bias);
+            foreach(Weight w in n.parents) sum += w.value * w.parent.value;
+            return ELU(sum + n.bias);
         }
     }
 }
