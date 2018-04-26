@@ -49,6 +49,11 @@ namespace LyNN
         private List<List<Node>> allNodes;
         private Random rand = new Random();
 
+        //Clipping values to try prevention of gradient explosion
+        public float gradient_clipping = 0.2f;
+        public float weight_clipping = 1.0f;
+        public float activation_clipping = 2.0f;
+
 
         /// <summary>
         /// Builds a network with the given amount of inputs, outputs, and hidden layers
@@ -146,7 +151,9 @@ namespace LyNN
         /// <summary>
         /// Randomizes the weights and biases for the network
         /// </summary>
-        public void RandomizeNetwork()
+        /// <param name="mulbias">The amount to multipli the randomized biases with(if 1, the values will be between -0.5 and 0.5)</param>
+        /// <param name="mulweight">The amount to multipli the randomized weights with(if 1, the values will be between -0.5 and 0.5)</param>
+        public void RandomizeNetwork(float mulbias = 1, float mulweight = 1)
         {
             for(int i = 0; i < allNodes.Count; i++)
             {
@@ -154,13 +161,13 @@ namespace LyNN
                 {
                     //Iterate through all nodes and randomize their bias
                     Node n = (allNodes[i])[j];
-                    n.bias = (float)rand.NextDouble() - 0.5f;
+                    n.bias = ((float)rand.NextDouble() - 0.5f) * mulbias;
 
                     //Then iterate through all of its children weights and randomize them
                     for (int k = 0; k < n.children.Count; k++)
                     {
                         Weight w = n.children[k];
-                        w.value = (float)rand.NextDouble() - 0.5f;
+                        w.value = ((float)rand.NextDouble() - 0.5f) * mulweight;
                     }
                 }
             }
@@ -280,13 +287,14 @@ namespace LyNN
         /// <summary>
         /// Exponential-based sigmoid activation function
         /// </summary>
-        static float Sigmoid_e(float val) { return (float)(1f / (1f + Math.Exp(-val))); }
+        float Sigmoid_e(float val) { return (float)(1f / (1f + Math.Exp(-val))); }
 
         /// <summary>
         /// ELU rectifier activation function
         /// </summary>
-        static float ELU(float val)
+        float ELU(float val)
         {
+            if (val > activation_clipping) return activation_clipping;
             if (val >= 0) return val;
             else return (float)(Math.Exp(val) - 1);
         }
@@ -294,13 +302,14 @@ namespace LyNN
         /// <summary>
         /// Derivative of the exponential-based sigmoid activation function
         /// </summary>
-        static float D_Sigmoid_e(float val) { return val * (1 - val); }
+        float D_Sigmoid_e(float val) { return val * (1 - val); }
 
         /// <summary>
         /// Derivative of the ELU rectifier function
         /// </summary>
-        static float D_ELU(float val)
+        float D_ELU(float val)
         {
+            if (val > activation_clipping) return 0;
             if (val >= 0) return 1;
             else return (float)Math.Exp(val);
         }
@@ -386,11 +395,31 @@ namespace LyNN
                     for (int x = 0; x < n.children.Count; x++)
                     {
                         Weight cw = n.children[x];
-                        cw.value += rate * (cw.vc / (float)cw.vc_count);
+                        float cwv = rate * (cw.vc / (float)cw.vc_count);
+
+                        //Apply gradient clipping
+                        if (cwv > gradient_clipping) cwv = gradient_clipping;
+                        if (cwv < -gradient_clipping) cwv = -gradient_clipping;
+                        cw.value += cwv;
+
+                        //Apply weight clipping
+                        if (cw.value > weight_clipping) cw.value = weight_clipping;
+                        if (cw.value < -weight_clipping) cw.value = -weight_clipping;
+
                         cw.vc = 0;
                         cw.vc_count = 0;
                     }
-                    n.bias += rate * ((n.bc * n.bias) / (float)n.bc_count);
+                    float bcv = rate * ((n.bc * n.bias) / (float)n.bc_count);
+
+                    //Apply gradient clipping
+                    if (bcv > gradient_clipping) bcv = gradient_clipping;
+                    if (bcv < -gradient_clipping) bcv = -gradient_clipping;
+                    n.bias += bcv;
+
+                    //Apply 'weight' clipping
+                    if (n.bias > weight_clipping) n.bias = weight_clipping;
+                    if (n.bias < -weight_clipping) n.bias = -weight_clipping;
+
                     n.bc = 0;
                     n.bc_count = 0;
                 }
