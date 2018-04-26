@@ -5,7 +5,7 @@ You can create networks as big as you want, and they can be saved to and loaded 
 Currently the default activation function is the ELU(Exponential Linear Unit), which is `y = x` for positive values and `y = a(e^x - 1)` for negative values.
 Note that this can cause gradient explosion if you're not careful when training, or initialize the weights with extreme values.
 
-Using only LyNN, I have been able to get 92% accuracy on the EMNIST digits dataset with only 4 minutes of training on an i7 4770k.
+Using only LyNN, I have been able to get 94% accuracy on the EMNIST digits dataset within 5 minutes of training on an i7 4770k(Using three hidden layers with 20 nodes each)
 
 # Example
 Setting up a network with a few layers, 4 inputs and 1 output, randomizing it, and training it with very basic data.
