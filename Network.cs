@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 
 namespace LyNN
 {
@@ -395,7 +393,7 @@ namespace LyNN
                     for (int x = 0; x < n.children.Count; x++)
                     {
                         Weight cw = n.children[x];
-                        float cwv = rate * (cw.vc / (float)cw.vc_count);
+                        float cwv = rate * (cw.vc / cw.vc_count);
 
                         //Apply gradient clipping
                         if (cwv > gradient_clipping) cwv = gradient_clipping;
@@ -409,7 +407,7 @@ namespace LyNN
                         cw.vc = 0;
                         cw.vc_count = 0;
                     }
-                    float bcv = rate * ((n.bc * n.bias) / (float)n.bc_count);
+                    float bcv = rate * (n.bc / n.bc_count);
 
                     //Apply gradient clipping
                     if (bcv > gradient_clipping) bcv = gradient_clipping;
@@ -447,7 +445,7 @@ namespace LyNN
 
             float nv = err_sum * D_ELU(n.value);
             n.nact = nv;
-            n.bc += nv; //Because the bias doesn't change, we can multiply it later.
+            n.bc += nv;
             n.bc_count++;
         }
 
@@ -459,7 +457,7 @@ namespace LyNN
         {
             float nv = n.error * D_ELU(n.value);
             n.nact = nv;
-            n.bc += nv; //Because the bias doesn't change, we can multiply it later.
+            n.bc += nv;
             n.bc_count++;
         }
 
