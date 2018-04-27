@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace LyNN
 {
@@ -40,7 +41,7 @@ namespace LyNN
     {
         public int numInputs;
         public int numOutputs;
-        public int numLayers;
+        public int numHiddenLayers;
 
         private List<Node> inputs;
         private List<Node> outputs;
@@ -70,7 +71,7 @@ namespace LyNN
             Network net = new Network();
             net.numInputs = numInputs;
             net.numOutputs = numOutputs;
-            net.numLayers = layers.Length;
+            net.numHiddenLayers = layers.Length;
             net.inputs = new List<Node>();
             net.outputs = new List<Node>();
             net.allNodes = new List<List<Node>>();
@@ -221,7 +222,7 @@ namespace LyNN
             //Read file
             //The layers are split by a double newline
             string[] all = File.ReadAllText(name).Split(new string[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
-            net.numLayers = all.Length - 2;
+            net.numHiddenLayers = all.Length - 2;
 
             for(int i = 0; i < all.Length; i++)
             {
@@ -321,15 +322,19 @@ namespace LyNN
         {
             if (inputs.Length != numInputs) throw new Exception("Incorrect number of inputs given! Got " + inputs.Length.ToString() + ", expected " + numInputs.ToString());
 
+            //Set input node values
             for (int i = 0; i < inputs.Length; i++) this.inputs[i].value = inputs[i];
 
-            //Calculate node value for each node in order
-            for (int i = 0; i < allNodes.Count; i++)
+            //Calculate node value for each node in order(skip input nodes because these obviously do not get calculated)
+            for (int i = 1; i < allNodes.Count; i++)
             {
-                for (int j = 0; j < allNodes[i].Count; j++)
+                List<Node> ani = allNodes[i];
+                foreach(Node n in ani)
                 {
-                    Node n = (allNodes[i])[j];
-                    n.value = GetNodeVal(n);
+                    //Sum all weights multiplied by their parent node, update the node value so that the next nodes can use this value(otherwise known as forward propagation)
+                    float sum = 0;
+                    foreach (Weight w in n.parents) sum += w.value * w.parent.value;
+                    n.value = ELU(sum + n.bias);
                 }
             }
 
@@ -353,20 +358,21 @@ namespace LyNN
 
             //Calculate the total error to return later
             float errorsum = 0;
-            for (int i = 0; i < goodOutputs.Length; i++)
+            for (int i = 0; i < numOutputs; i++)
             {
-                outputs[i].error = goodOutputs[i] - rets[i];
-                errorsum += GetError(goodOutputs[i], rets[i]);
+                float diff = goodOutputs[i] - rets[i];
+                outputs[i].error = diff;
+                errorsum += diff * diff;
             }
 
             //Go through all output nodes, adjust the biases and set nact values.
-            for (int j = 0; j < outputs.Count; j++)
+            for (int j = 0; j < numOutputs; j++)
             {
                 BackPropOutputOne(outputs[j]);
             }
 
-            //Go through all nodes backwards(from output to input) and adjust the weights based on the error values. Skip the output nodes
-            for (int i = numLayers; i >= 0; i--)
+            //Go through all nodes backwards(from output to input, but skipping the output nodes) and adjust the weights based on the error values
+            for (int i = numHiddenLayers; i >= 0; i--)
             {
                 List<Node> nodes = allNodes[i];
                 for (int j = 0; j < nodes.Count; j++)
@@ -375,7 +381,7 @@ namespace LyNN
                 }
             }
 
-            return errorsum;
+            return 0.5f * errorsum;
         }
 
         /// <summary>
@@ -384,7 +390,7 @@ namespace LyNN
         /// <param name="rate">The rate at which to change</param>
         public void ApplyTrainingChanges(float rate)
         {
-            for (int i = numLayers + 1; i >= 0; i--)
+            for (int i = numHiddenLayers + 1; i >= 0; i--)
             {
                 List<Node> nodes = allNodes[i];
                 for (int j = 0; j < nodes.Count; j++)
@@ -431,19 +437,20 @@ namespace LyNN
         void BackPropOne(Node n)
         {
             float err_sum = 0;
+            float nval = n.value;
             for (int i = 0; i < n.children.Count; i++)
             {
                 Weight cw = n.children[i];
                 float nact = cw.child.nact;
 
                 //Adjust weight based on rate and add error to total error sum
-                cw.vc += nact * n.value;
+                cw.vc += nact * nval;
                 cw.vc_count++;
 
                 err_sum += nact * cw.value;
             }
 
-            float nv = err_sum * D_ELU(n.value);
+            float nv = err_sum * D_ELU(nval);
             n.nact = nv;
             n.bc += nv;
             n.bc_count++;
@@ -459,32 +466,6 @@ namespace LyNN
             n.nact = nv;
             n.bc += nv;
             n.bc_count++;
-        }
-
-        /// <summary>
-        /// Gets the error value
-        /// </summary>
-        /// <param name="expected">The correct output value that the network should strive towards</param>
-        /// <param name="actual">The actual output value of the network</param>
-        /// <returns>Returns the error value</returns>
-        float GetError(float expected, float actual)
-        {
-            float diff = expected - actual;
-            return 0.5f * diff * diff;
-        }
-
-        /// <summary>
-        /// Calculates the value that a node should be(without actually editing the value of the node)
-        /// </summary>
-        /// <param name="n">The node to calculate the value for</param>
-        /// <returns>The value of the node</returns>
-        float GetNodeVal(Node n)
-        {
-            if (n.type == NodeType.input) return n.value;
-
-            float sum = 0;
-            foreach(Weight w in n.parents) sum += w.value * w.parent.value;
-            return ELU(sum + n.bias);
-        }
+        } 
     }
 }
