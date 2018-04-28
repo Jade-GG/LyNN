@@ -15,25 +15,25 @@ namespace LyNN
     public class Node
     {
         public NodeType type;
-        public float value;
+        public double value;
         public List<Weight> parents;
         public List<Weight> children;
-        public float bias;
+        public double bias;
 
         //error values
-        public float error;
-        public float nact;
-        public float bc;
+        public double error;
+        public double nact;
+        public double bc;
         public int bc_count;
     }
 
     public class Weight
     {
-        public float value;
+        public double value;
         public Node parent;
         public Node child;
 
-        public float vc;
+        public double vc;
         public int vc_count;
     }
 
@@ -49,9 +49,9 @@ namespace LyNN
         private Random rand = new Random();
 
         //Clipping values to try prevention of gradient explosion
-        public float gradient_clipping = 0.2f;
-        public float weight_clipping = 1.0f;
-        public float activation_clipping = 2.0f;
+        public double gradient_clipping = 0.2;
+        public double weight_clipping = 1.0;
+        public double activation_clipping = 2.0;
 
 
         /// <summary>
@@ -152,7 +152,7 @@ namespace LyNN
         /// </summary>
         /// <param name="mulbias">The amount to multipli the randomized biases with(if 1, the values will be between -0.5 and 0.5)</param>
         /// <param name="mulweight">The amount to multipli the randomized weights with(if 1, the values will be between -0.5 and 0.5)</param>
-        public void RandomizeNetwork(float mulbias = 1, float mulweight = 1)
+        public void RandomizeNetwork(double mulbias = 1, double mulweight = 1)
         {
             for(int i = 0; i < allNodes.Count; i++)
             {
@@ -160,13 +160,13 @@ namespace LyNN
                 {
                     //Iterate through all nodes and randomize their bias
                     Node n = (allNodes[i])[j];
-                    n.bias = ((float)rand.NextDouble() - 0.5f) * mulbias;
+                    n.bias = (rand.NextDouble() - 0.5) * mulbias;
 
                     //Then iterate through all of its children weights and randomize them
                     for (int k = 0; k < n.children.Count; k++)
                     {
                         Weight w = n.children[k];
-                        w.value = ((float)rand.NextDouble() - 0.5f) * mulweight;
+                        w.value = (rand.NextDouble() - 0.5) * mulweight;
                     }
                 }
             }
@@ -261,7 +261,7 @@ namespace LyNN
 
                     //Add this node to the list of all nodes, then start reading the values out of the file
                     net.allNodes[layer].Add(n);
-                    n.bias = float.Parse(lines[i * 2 + 1]);
+                    n.bias = double.Parse(lines[i * 2 + 1]);
 
                     if (i * 2 + 2 < lines.Length)
                     {
@@ -272,7 +272,7 @@ namespace LyNN
                             Weight w = new Weight();
                             w.parent = n;
                             w.child = net.allNodes[layer + 1][j];
-                            w.value = float.Parse(ws[j]);
+                            w.value = double.Parse(ws[j]);
                             n.children.Add(w);
                             w.child.parents.Add(w);
                         }
@@ -286,31 +286,31 @@ namespace LyNN
         /// <summary>
         /// Exponential-based sigmoid activation function
         /// </summary>
-        float Sigmoid_e(float val) { return (float)(1f / (1f + Math.Exp(-val))); }
+        double Sigmoid_e(double val) { return (1 / (1 + Math.Exp(-val))); }
 
         /// <summary>
         /// ELU rectifier activation function
         /// </summary>
-        float ELU(float val)
+        double ELU(double val)
         {
             if (val > activation_clipping) return activation_clipping;
             if (val >= 0) return val;
-            else return (float)(Math.Exp(val) - 1);
+            else return (Math.Exp(val) - 1);
         }
 
         /// <summary>
         /// Derivative of the exponential-based sigmoid activation function
         /// </summary>
-        float D_Sigmoid_e(float val) { return val * (1 - val); }
+        double D_Sigmoid_e(double val) { return val * (1 - val); }
 
         /// <summary>
         /// Derivative of the ELU rectifier function
         /// </summary>
-        float D_ELU(float val)
+        double D_ELU(double val)
         {
             if (val > activation_clipping) return 0;
             if (val >= 0) return 1;
-            else return (float)Math.Exp(val);
+            else return Math.Exp(val);
         }
 
         /// <summary>
@@ -318,7 +318,7 @@ namespace LyNN
         /// </summary>
         /// <param name="inputs">The inputs to evaluate</param>
         /// <returns>Returns the output of the network</returns>
-        public float[] Evaluate(float[] inputs)
+        public double[] Evaluate(double[] inputs)
         {
             if (inputs.Length != numInputs) throw new Exception("Incorrect number of inputs given! Got " + inputs.Length.ToString() + ", expected " + numInputs.ToString());
 
@@ -332,14 +332,14 @@ namespace LyNN
                 foreach(Node n in ani)
                 {
                     //Sum all weights multiplied by their parent node, update the node value so that the next nodes can use this value(otherwise known as forward propagation)
-                    float sum = 0;
+                    double sum = 0;
                     foreach (Weight w in n.parents) sum += w.value * w.parent.value;
                     n.value = ELU(sum + n.bias);
                 }
             }
 
-            //Read the output nodes and write them into a float array to return
-            float[] ret = new float[numOutputs];
+            //Read the output nodes and write them into a double array to return
+            double[] ret = new double[numOutputs];
             for (int i = 0; i < outputs.Count; i++) ret[i] = outputs[i].value;
 
             return ret;
@@ -351,16 +351,16 @@ namespace LyNN
         /// <param name="inputs">Training data inputs</param>
         /// <param name="goodOutputs">Training data outputs(that the network should strive to get right)</param>
         /// <returns>Returns the total error in the output, lower is better</returns>
-        public float TrainNetwork(float[] inputs, float[] goodOutputs)
+        public double TrainNetwork(double[] inputs, double[] goodOutputs)
         {
             //Feed the inputs to the network and evaluate
-            float[] rets = Evaluate(inputs);
+            double[] rets = Evaluate(inputs);
 
             //Calculate the total error to return later
-            float errorsum = 0;
+            double errorsum = 0;
             for (int i = 0; i < numOutputs; i++)
             {
-                float diff = goodOutputs[i] - rets[i];
+                double diff = goodOutputs[i] - rets[i];
                 outputs[i].error = diff;
                 errorsum += diff * diff;
             }
@@ -388,7 +388,7 @@ namespace LyNN
         /// Applies the average of all changes that the last training set proposed
         /// </summary>
         /// <param name="rate">The rate at which to change</param>
-        public void ApplyTrainingChanges(float rate)
+        public void ApplyTrainingChanges(double rate)
         {
             for (int i = numHiddenLayers + 1; i >= 0; i--)
             {
@@ -399,7 +399,7 @@ namespace LyNN
                     for (int x = 0; x < n.children.Count; x++)
                     {
                         Weight cw = n.children[x];
-                        float cwv = rate * (cw.vc / cw.vc_count);
+                        double cwv = rate * (cw.vc / cw.vc_count);
 
                         //Apply gradient clipping
                         if (cwv > gradient_clipping) cwv = gradient_clipping;
@@ -413,7 +413,7 @@ namespace LyNN
                         cw.vc = 0;
                         cw.vc_count = 0;
                     }
-                    float bcv = rate * (n.bc / n.bc_count);
+                    double bcv = rate * (n.bc / n.bc_count);
 
                     //Apply gradient clipping
                     if (bcv > gradient_clipping) bcv = gradient_clipping;
@@ -436,12 +436,12 @@ namespace LyNN
         /// <param name="n">The node to calculate error values for</param>
         void BackPropOne(Node n)
         {
-            float err_sum = 0;
-            float nval = n.value;
+            double err_sum = 0;
+            double nval = n.value;
             for (int i = 0; i < n.children.Count; i++)
             {
                 Weight cw = n.children[i];
-                float nact = cw.child.nact;
+                double nact = cw.child.nact;
 
                 //Adjust weight based on rate and add error to total error sum
                 cw.vc += nact * nval;
@@ -450,7 +450,7 @@ namespace LyNN
                 err_sum += nact * cw.value;
             }
 
-            float nv = err_sum * D_ELU(nval);
+            double nv = err_sum * D_ELU(nval);
             n.nact = nv;
             n.bc += nv;
             n.bc_count++;
@@ -462,7 +462,7 @@ namespace LyNN
         /// <param name="n">The node to calculate error values for</param>
         void BackPropOutputOne(Node n)
         {
-            float nv = n.error * D_ELU(n.value);
+            double nv = n.error * D_ELU(n.value);
             n.nact = nv;
             n.bc += nv;
             n.bc_count++;
