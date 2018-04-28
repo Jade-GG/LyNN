@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace LyNN
@@ -178,33 +179,33 @@ namespace LyNN
         /// <param name="name">The filename to write it to</param>
         public void SaveNetwork(string name)
         {
-            string nt = "";
+            StringBuilder nt = new StringBuilder();
             for(int i = 0; i < allNodes.Count; i++)
             {
                 List<Node> nn = allNodes[i];
 
                 //Write the amount of nodes in this layer on one line
-                nt += nn.Count + "\n";
+                nt.Append(nn.Count + "\n");
                 foreach(Node n in nn)
                 {
                     //Then, for each node, write the bias on one line, and all of its children weights in order of the node's index
-                    nt += n.bias + "\n";
+                    nt.Append(n.bias + "\n");
                     if (n.children.Count == 0)
                     {
-                        nt += ";";
+                        nt.Append(";");
                     }
                     else
                     {
                         foreach (Weight w in n.children)
                         {
-                            nt += w.value + ";";
+                            nt.Append(w.value.ToString() + ";");
                         }
                     }
-                    nt += "\n";
+                    nt.Append("\n");
                 }
-                nt += "\n";
+                if(i < allNodes.Count - 1) nt.Append("\n");
             }
-            File.WriteAllText(name, nt.Substring(0, nt.Length - 1)); //The -1 is to get rid of the double newline that would otherwise always exist at the end of the file
+            File.WriteAllText(name, nt.ToString());
         }
 
         /// <summary>
