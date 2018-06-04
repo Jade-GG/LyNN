@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace LyNN
 {
@@ -13,6 +12,14 @@ namespace LyNN
         output,
     }
 
+    /// <summary>
+    /// Delegate activation function to create custom functions(note that input nodes do not use this function)
+    /// </summary>
+    /// <param name="val">The value given to this activation function</param>
+    /// <param name="self">The node that's calling this function. Mostly here for the possibility of doing wacky stuff like memory cells or something</param>
+    /// <returns></returns>
+    public delegate double actfunc(double val, Node self);
+
     public class Node
     {
         public NodeType type;
@@ -20,12 +27,18 @@ namespace LyNN
         public List<Weight> parents;
         public List<Weight> children;
         public double bias;
+        public actfunc af;
+        public actfunc d_af;
+        public ActivationFunction actfunc;
 
         //error values
         public double error;
         public double nact;
         public double bc;
         public int bc_count;
+
+        //Extra custom values for some possibly wacky nodes
+        public List<double> customval = new List<double>();
     }
 
     public class Weight
@@ -36,6 +49,18 @@ namespace LyNN
 
         public double vc;
         public int vc_count;
+    }
+
+    public enum ActivationFunction
+    {
+        Sigmoid = 1,
+        ELU = 101,
+        ReLU = 102,
+
+        Custom1 = -1,
+        Custom2 = -2,
+        Custom3 = -3,
+        //Etc... Going on the assumption here that nobody would *ever* need that many custom activation functions in one network
     }
 
     public class Network
@@ -49,11 +74,13 @@ namespace LyNN
         private List<List<Node>> allNodes;
         private Random rand = new Random();
 
+        private List<actfunc> CustomFunctions_d = new List<actfunc>();
+        private List<actfunc> CustomFunctions = new List<actfunc>();
+
         //Clipping values to try prevention of gradient explosion
         public double gradient_clipping = 0.2;
         public double weight_clipping = 1.0;
         public double activation_clipping = 2.0;
-
 
         /// <summary>
         /// Builds a network with the given amount of inputs, outputs, and hidden layers
@@ -61,21 +88,28 @@ namespace LyNN
         /// <param name="numInputs">Amount of inputs the network should have</param>
         /// <param name="layers">An array containing the amount of hidden nodes per layer</param>
         /// <param name="numOutputs">Amount of outputs the network should have</param>
+        /// <param name="actfunc">The activation function to use</param>
         /// <returns>Returns a Network object</returns>
-        public static Network BuildNetwork(int numInputs, int[] layers, int numOutputs)
+        public static Network BuildNetwork(int numInputs, int[] layers, int numOutputs, ActivationFunction actfunc = ActivationFunction.ELU)
+        {
+            Network net = new Network();
+            net.Build(numInputs, layers, numOutputs, actfunc);
+            return net;
+        }
+
+        public void Build(int numInputs, int[] layers, int numOutputs, ActivationFunction actfunc = ActivationFunction.ELU)
         {
             //Sanity checking arguments
             if (numInputs < 1) throw new Exception("Can't have less than one input");
             if (numOutputs < 1) throw new Exception("Can't have less than one output");
 
             //Create and initialize the network
-            Network net = new Network();
-            net.numInputs = numInputs;
-            net.numOutputs = numOutputs;
-            net.numHiddenLayers = layers.Length;
-            net.inputs = new List<Node>();
-            net.outputs = new List<Node>();
-            net.allNodes = new List<List<Node>>();
+            this.numInputs = numInputs;
+            this.numOutputs = numOutputs;
+            this.numHiddenLayers = layers.Length;
+            this.inputs = new List<Node>();
+            this.outputs = new List<Node>();
+            this.allNodes = new List<List<Node>>();
 
             //Build the node structure
             List<Node> prevs = new List<Node>();
@@ -115,6 +149,10 @@ namespace LyNN
                     n.parents = new List<Weight>();
                     n.bias = 0;
 
+                    n.af = this.ETF(actfunc, false);
+                    n.d_af = this.ETF(actfunc, true);
+                    n.actfunc = actfunc;
+
                     //Run through all of the nodes in the previous layers and connect them
                     if (prevs.Count > 0)
                     {
@@ -131,28 +169,26 @@ namespace LyNN
                     }
 
                     //Add to the input/output lists
-                    if (t == NodeType.input) net.inputs.Add(n);
-                    if (t == NodeType.output) net.outputs.Add(n);
+                    if (t == NodeType.input) this.inputs.Add(n);
+                    if (t == NodeType.output) this.outputs.Add(n);
 
                     //Add to 'news' list just so that it can be used as a reference for the nodes in the next layer
                     news.Add(n);
                 }
 
                 //Add the new layer of nodes to the allNodes list
-                net.allNodes.Add(news);
+                this.allNodes.Add(news);
 
                 prevs.Clear();
                 prevs.AddRange(news);
             }
-
-            return net;
         }
 
         /// <summary>
         /// Randomizes the weights and biases for the network
         /// </summary>
-        /// <param name="mulbias">The amount to multipli the randomized biases with(if 1, the values will be between -0.5 and 0.5)</param>
-        /// <param name="mulweight">The amount to multipli the randomized weights with(if 1, the values will be between -0.5 and 0.5)</param>
+        /// <param name="mulbias">The amount to multiply the randomized biases with(if 1, the values will be between -0.5 and 0.5)</param>
+        /// <param name="mulweight">The amount to multiply the randomized weights with(if 1, the values will be between -0.5 and 0.5)</param>
         public void RandomizeNetwork(double mulbias = 1, double mulweight = 1)
         {
             for(int i = 0; i < allNodes.Count; i++)
@@ -188,8 +224,12 @@ namespace LyNN
                 nt.Append(nn.Count + "\n");
                 foreach(Node n in nn)
                 {
-                    //Then, for each node, write the bias on one line, and all of its children weights in order of the node's index
-                    nt.Append(n.bias + "\n");
+                    //Then, for each node, write the bias, value function ID, and possibly its custom variable values on one line
+                    nt.Append(n.bias + ";" + (int)n.actfunc);
+                    for(int j = 0; j < n.customval.Count; j++) nt.Append(";" + n.customval[j]);
+                    nt.Append("\n");
+
+                    //Write all of its children weights in order of the node's index
                     if (n.children.Count == 0)
                     {
                         nt.Append(";");
@@ -212,22 +252,29 @@ namespace LyNN
         /// Loads a network from a file
         /// </summary>
         /// <param name="name">The filename to read from</param>
-        public static Network LoadNetwork(string name)
+        /// <param name="def_actfunc">The value function to fall back to in case a node doesn't have one assigned</param>
+        public static Network LoadNetwork(string name, ActivationFunction def_actfunc = ActivationFunction.ELU)
+        {
+            Network nw = new Network();
+            nw.Load(name, def_actfunc);
+            return nw;
+        }
+
+        public void Load(string name, ActivationFunction def_actfunc = ActivationFunction.ELU)
         {
             //Create and initialize the network
-            Network net = new Network();
-            net.inputs = new List<Node>();
-            net.outputs = new List<Node>();
-            net.allNodes = new List<List<Node>>();
+            this.inputs = new List<Node>();
+            this.outputs = new List<Node>();
+            this.allNodes = new List<List<Node>>();
 
             //Read file
             //The layers are split by a double newline
             string[] all = File.ReadAllText(name).Split(new string[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
-            net.numHiddenLayers = all.Length - 2;
+            this.numHiddenLayers = all.Length - 2;
 
             for(int i = 0; i < all.Length; i++)
             {
-                net.allNodes.Add(new List<Node>());
+                this.allNodes.Add(new List<Node>());
             }
 
             for(int layer = all.Length - 1; layer >= 0; layer--)
@@ -237,8 +284,8 @@ namespace LyNN
                 int num = int.Parse(lines[0]);
 
                 //Add to numinputs/outputs vars
-                if (layer == 0) net.numInputs = num;
-                if (layer == all.Length - 1) net.numOutputs = num;
+                if (layer == 0) this.numInputs = num;
+                if (layer == all.Length - 1) this.numOutputs = num;
 
                 for (int i = 0; i < num; i++)
                 {
@@ -249,20 +296,43 @@ namespace LyNN
                     if (layer == 0)
                     {
                         //Input nodes get marked as input nodes and added to the list of input nodes
-                        net.inputs.Add(n);
+                        this.inputs.Add(n);
                         n.type = NodeType.input;
                     }
                     else if (layer == all.Length - 1)
                     {
                         //Output nodes get marked as output nodes and added to the list of output nodes
-                        net.outputs.Add(n);
+                        this.outputs.Add(n);
                         n.type = NodeType.output;
                     }
                     else n.type = NodeType.node; //Everything else is a regular node
 
                     //Add this node to the list of all nodes, then start reading the values out of the file
-                    net.allNodes[layer].Add(n);
-                    n.bias = double.Parse(lines[i * 2 + 1]);
+                    this.allNodes[layer].Add(n);
+
+                    //Backwards compatibility check
+                    string biasline = lines[i * 2 + 1];
+                    if (biasline.Contains(";"))
+                    {
+                        //Set bias and value function
+                        string[] biassplit = biasline.Split(new char[] { ';' });
+                        n.bias = double.Parse(biassplit[0]);
+                        n.actfunc = (ActivationFunction)int.Parse(biassplit[1]);
+
+                        //If there's any more on that line, that means there's custom values.
+                        for(int j = 2; j < biassplit.Length; j++) n.customval.Add(double.Parse(biassplit[j]));
+                    }
+                    else
+                    {
+                        //Fall back to the default value function
+                        n.bias = double.Parse(biasline);
+                        n.actfunc = def_actfunc;
+                    }
+
+                    //Assign value function(and complementary derivative) to the node
+                    n.af = this.ETF(n.actfunc, false);
+                    n.d_af = this.ETF(n.actfunc, true);
+
 
                     if (i * 2 + 2 < lines.Length)
                     {
@@ -272,7 +342,7 @@ namespace LyNN
                         {
                             Weight w = new Weight();
                             w.parent = n;
-                            w.child = net.allNodes[layer + 1][j];
+                            w.child = this.allNodes[layer + 1][j];
                             w.value = double.Parse(ws[j]);
                             n.children.Add(w);
                             w.child.parents.Add(w);
@@ -280,19 +350,71 @@ namespace LyNN
                     }
                 }
             }
-
-            return net;
         }
+
+        
+
+
+        /// <summary>
+        /// Adds a custom activation function and returns the ID it has been given
+        /// </summary>
+        /// <param name="Function"></param>
+        /// <param name="Derivative"></param>
+        public ActivationFunction AddCustomActivation(actfunc Function, actfunc Derivative)
+        {
+            CustomFunctions.Add(Function);
+            CustomFunctions_d.Add(Derivative);
+            return (ActivationFunction)(-CustomFunctions.Count);
+        }
+
+
+        /// <summary>
+        /// Gets the function attached to the given activation function value
+        /// </summary>
+        /// <param name="actfunc">The activation function enum value</param>
+        /// <param name="d">Whether or not this should return the derivative of the function</param>
+        /// <returns></returns>
+        private actfunc ETF(ActivationFunction actfunc, bool d)
+        {
+            //Custom activation functions
+            if(actfunc < 0)
+            {
+                int id = -1 - (int)actfunc;
+                if (id > CustomFunctions.Count) throw new IndexOutOfRangeException("Custom function ID doesn't exist!");
+
+                if (d) return CustomFunctions_d[id];
+                return CustomFunctions[id];
+            }
+
+            //Pre-programmed activation functions
+            switch(actfunc)
+            {
+                case ActivationFunction.ELU:
+                    if (d) return D_ELU;
+                    return ELU;
+
+                case ActivationFunction.ReLU:
+                    if (d) return D_ReLU;
+                    return ReLU;
+
+                default:
+                case ActivationFunction.Sigmoid:
+                    if (d) return D_Sigmoid_e;
+                    return Sigmoid_e;
+            }
+        }
+
+
 
         /// <summary>
         /// Exponential-based sigmoid activation function
         /// </summary>
-        double Sigmoid_e(double val) { return (1 / (1 + Math.Exp(-val))); }
+        public double Sigmoid_e(double val, Node self) { return (1 / (1 + Math.Exp(-val))); }
 
         /// <summary>
         /// ELU rectifier activation function
         /// </summary>
-        double ELU(double val)
+        public double ELU(double val, Node self)
         {
             if (val > activation_clipping) return activation_clipping;
             if (val >= 0) return val;
@@ -300,18 +422,39 @@ namespace LyNN
         }
 
         /// <summary>
+        /// ReLU rectifier activation function
+        /// </summary>
+        public double ReLU(double val, Node self)
+        {
+            if (val > activation_clipping) return activation_clipping;
+            if (val >= 0) return val;
+            else return 0;
+        }
+
+
+        /// <summary>
         /// Derivative of the exponential-based sigmoid activation function
         /// </summary>
-        double D_Sigmoid_e(double val) { return val * (1 - val); }
+        public double D_Sigmoid_e(double val, Node self) { return val * (1 - val); }
 
         /// <summary>
         /// Derivative of the ELU rectifier function
         /// </summary>
-        double D_ELU(double val)
+        public double D_ELU(double val, Node self)
         {
             if (val > activation_clipping) return 0;
             if (val >= 0) return 1;
             else return Math.Exp(val);
+        }
+
+        /// <summary>
+        /// Derivative of the ReLU rectifier function
+        /// </summary>
+        public double D_ReLU(double val, Node self)
+        {
+            if (val > activation_clipping) return 0;
+            if (val >= 0) return 1;
+            else return 0;
         }
 
         /// <summary>
@@ -335,7 +478,7 @@ namespace LyNN
                     //Sum all weights multiplied by their parent node, update the node value so that the next nodes can use this value(otherwise known as forward propagation)
                     double sum = 0;
                     foreach (Weight w in n.parents) sum += w.value * w.parent.value;
-                    n.value = ELU(sum + n.bias);
+                    n.value = n.af(sum + n.bias, n);
                 }
             }
 
@@ -451,7 +594,7 @@ namespace LyNN
                 err_sum += nact * cw.value;
             }
 
-            double nv = err_sum * D_ELU(nval);
+            double nv = err_sum * n.d_af(nval, n);
             n.nact = nv;
             n.bc += nv;
             n.bc_count++;
@@ -463,7 +606,7 @@ namespace LyNN
         /// <param name="n">The node to calculate error values for</param>
         void BackPropOutputOne(Node n)
         {
-            double nv = n.error * D_ELU(n.value);
+            double nv = n.error * n.d_af(n.value, n);
             n.nact = nv;
             n.bc += nv;
             n.bc_count++;
