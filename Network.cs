@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 
@@ -316,16 +317,16 @@ namespace LyNN
                     {
                         //Set bias and value function
                         string[] biassplit = biasline.Split(new char[] { ';' });
-                        n.bias = double.Parse(biassplit[0]);
+                        n.bias = double.Parse(biassplit[0], CultureInfo.InvariantCulture);
                         n.actfunc = (ActivationFunction)int.Parse(biassplit[1]);
 
                         //If there's any more on that line, that means there's custom values.
-                        for(int j = 2; j < biassplit.Length; j++) n.customval.Add(double.Parse(biassplit[j]));
+                        for(int j = 2; j < biassplit.Length; j++) n.customval.Add(double.Parse(biassplit[j], CultureInfo.InvariantCulture));
                     }
                     else
                     {
                         //Fall back to the default value function
-                        n.bias = double.Parse(biasline);
+                        n.bias = double.Parse(biasline, CultureInfo.InvariantCulture);
                         n.actfunc = def_actfunc;
                     }
 
@@ -343,7 +344,7 @@ namespace LyNN
                             Weight w = new Weight();
                             w.parent = n;
                             w.child = this.allNodes[layer + 1][j];
-                            w.value = double.Parse(ws[j]);
+                            w.value = double.Parse(ws[j], CultureInfo.InvariantCulture);
                             n.children.Add(w);
                             w.child.parents.Add(w);
                         }
